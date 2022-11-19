@@ -43,16 +43,11 @@
 
 ; [contract] num-op: (number number -> number) -> (LFAE LFAE -> LFAE)
 ; [purpose] to make number operation abstrct
-; [test] 
 (define (num-op op x y)
     (numV (op (numV-n (strict x))
                         (numV-n (strict y)))))
 (define (num+ x y) (num-op + x y))
 (define (num- x y) (num-op - x y))
-
-
-
-
 
 ; [contract] parse: sexp -> LFAE
 ; [purpose] to convert sexp to LFAE
@@ -88,15 +83,15 @@
 ; [contract] lookup: symbol DefrdSub -> symbol
 ; [purpose] to find the looking value
 (define (lookup name ds)
-  (cond
-    [(empty? ds) (error 'lookup "name not found")]
-    [else (cond
-            [(symbol=? (name (first ds)))
-             name]
-            [else (lookup name (rest ds))])]))
+      (type-case DefrdSub ds
+            [mtSub       ()                  (error 'lookup "free identifier")]
+            [aSub      (i v saved)      (if (symbol=? i name)
+                                                                     v
+                                                                     (lookup name saved))]))
 
 (test (parse 'x) (id 'x))
 (parse '{+ 1 2})
+(interp (parse '{{fun {x} {+ x 10}} 15}) (mtSub))
 (interp (parse '{+ 1 2})(mtSub))
 (parse '{{fun {x} 0} {+ 1 {fun {y} 2}}})
 (interp (parse '{{fun {x} 0} {+ 1 {fun {y} 2}}}) (mtSub))
