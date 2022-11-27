@@ -67,18 +67,17 @@
 ; [purpose] to get LFAE value
 (define (interp lfae ds)
   (type-case LFAE lfae
-    [num (n) (numV n)]
-    [add (l r) (num+ (interp l ds) (interp r ds))]
-    [sub (l r) (num- (interp l ds) (interp r ds))]
-    [id (name) (lookup name ds)]
-    [fun (param body-expr) (closureV param body-expr ds)]
-    [app (f a)
-             (local [(define f-val (strict (interp f ds)))
-                                 (define a-val (exprV a ds (box #f)))]
-                            (interp (closureV-body f-val)
-                                         (aSub (closureV-param f-val)
-                                                     a-val
-                                                     (closureV-ds f-val))))]))
+     [num (n)      (numV n)]
+     [add (l r)    (num+ (interp l ds) (interp r ds))]
+     [sub (l r)    (num- (interp l ds) (interp r ds))]
+     [id  (s)     (lookup s ds)]
+     [fun (p b)  (closureV p b ds)]
+     [app (f a)   (local [(define f-val (strict (interp f ds)))
+                          (define a-val (exprV a ds (box #f)))]
+                   (strict(interp (closureV-body f-val)
+                           (aSub (closureV-param f-val)
+                                 a-val
+                                 (closureV-ds f-val)))))]))
 
 ; [contract] lookup: symbol DefrdSub -> symbol
 ; [purpose] to find the looking value
@@ -93,5 +92,5 @@
 (parse '{+ 1 2})
 (interp (parse '{{fun {x} {+ x 10}} 15}) (mtSub))
 (interp (parse '{+ 1 2})(mtSub))
-(parse '{{fun {x} 0} {+ 1 {fun {y} 2}}})
-(interp (parse '{{fun {x} 0} {+ 1 {fun {y} 2}}}) (mtSub))
+(parse '{{fun {x} 10} {+ 1 {fun {y} 2}}})
+(interp (parse '{{fun {x} 10} {+ 1 {fun {y} 2}}}) (mtSub))
