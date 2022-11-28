@@ -116,24 +116,51 @@
 
 
 
-;[contract] is-recursion: RLFAE DefrdSub->bool
+(list 'with (list 'mk-rec
+                       (list 'fun '(body-proc)
+                             (list 'with
+                                   (list 'fx
+                                         (list 'fun '(fY)
+                                               (list 'with
+                                                     (list 'f
+                                                           (list 'fun '(x)
+                                                                 (list (list 'fY 'fY) 'x)))
+                                                     (list 'body-proc 'f)))) (list 'fX 'fX))))
+           (list 'with (list 'i (list 'mk-rec '(v) )) '(e)))
+
+;[contract] is-recursion: sexp -> sexp
 ;[purpose] to check wheter an RLFAE expression contains recursion
-(define (desugar v)
-  (display "yaho!")
-  v
+(define (desugar sexp)
+  (match sexp
+    [(list 'with (list i v) e)
+     (list 'with (list 'mk-rec
+                       (list 'fun '(body-proc)
+                             (list 'with
+                                   (list 'fx
+                                         (list 'fun '(fY)
+                                               (list 'with
+                                                     (list 'f
+                                                           (list 'fun '(x)
+                                                                 (list (list 'fY 'fY) 'x)))
+                                                     (list 'body-proc 'f)))) (list 'fX 'fX))))
+           (list 'with (list i (list 'mk-rec (list 'fun (list i)  v))) e))]
+    [else sexp])
   )
-(display "=========================\n")
-(display (is-recursion-in-v 'fac '{fun {n}
-                       {ifexp {= n 0}
-                            1
-                            {* n {fac {- n 1}}}}} 0))
+
+;(desugar'{with {fac {fun {n}
+;                       {ifexp {= n 0}
+;                            1
+;                            {* n {fac {- n 1}}}}}}
+;          {fac 3}})
+
+
 (display "=========================\n")
 
-(is-recursion '{with {fac {fun {n}
+(desugar '{with {fac {fun {n}
                        {ifexp {= n 0}
                             1
                             {* n {fac {- n 1}}}}}}
-          {fac 3}})
+          {fac 10}})
 (display "=========================\n")
 (is-recursion '{with {x 1} {+ x 2}})
 (display "=========================\n")
@@ -261,7 +288,7 @@
                             {* n {fac {- n 1}}}}}}
           {fac 3}})
 
-(run '{rec {fib {fun {n}
+(parse '{with {fib {fun {n}
                         {ifexp {orop {= n 0} {= n 1}}
                                1
                                {+{fib {- n 1}} {fib {- n 2}}}}}}
@@ -281,42 +308,38 @@
                                                  {ifexp {= n 0}
                                                      1
                                                      {* n {fac {- n 1}}}}}} {fac 4}}})
-'===============
-;(run '{rec {fac {fun {n}
+(display "===============\n")
+
+'{with {mk-rec {fun {body-proc}
+                          {with {fX {fun {fY}
+                                         {with {f {fun {x}
+                                                       {{fY fY} x}}}
+                                               {body-proc f}}}}
+                                {fX fX}}}}
+             {with {fac {mk-rec
+                         {fun {fac} ; Exactly like original fac
+                              {fun {n}
+                                   {ifexp {= n 0}
+                                          1
+                                          {* n {fac {- n 1}}}}}}}}
+                   {fac 10}}}
+(parse'{with {mk-rec {fun {body-proc}
+                          {with {fX {fun {fY}
+                                         {with {f {fun {x}
+                                                       {{fY fY} x}}}
+                                               {body-proc f}}}}
+                                {fX fX}}}}
+             {with {fac {mk-rec
+                         {fun {fac} ; Exactly like original fac
+                              {fun {n}
+                                   {ifexp {= n 0}
+                                          1
+                                          {* n {fac {- n 1}}}}}}}}
+                   {fac 10}}})
+
+
+;(run '{with {fac {fun {n}
 ;                        {ifexp {= n 0}
 ;                               1
-;                               {* n {fac {- n 1}}}}}} {fac 10}} (mtSub))
-
-(parse '{with {sum {fun {x} {+ x x}}} {with {fac {fun {n}
-                                                {ifexp {= n 0}
-                                                       0
-                                                       {+ n {sum {- n 1}}}}}} {fac 10}}})
-(app (fun 'sum (app (fun 'fac (app (id 'fac) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 0) (add (id 'n) (app (id 'sum) (sub (id 'n) (num 1))))))))
-     (fun 'x (add (id 'x) (id 'x))))
-                             
-
-(run '{with {sum {fun {x} {+ x x}}} {with {fac {fun {n}
-                                                {ifexp {= n 3}
-                                                       100
-                                                       {+ n {sum {- n 1}}}}}} {fac 9}}})
-(parse '{with {sum {fun {n} {ifexp {= n 0} 0 {+ {sum {- n 1}} n}}}} {sum 10}})
-'{with {sum {fun {n} {ifexp {= n 0} 0 {+ {sum {- n 1}} n}}}} {sum 10}}
-
-(run '{with {mk-rec {fun {body-proc}
-                    {with {fX {fun {fY}
-                                   {with {f {fun {x}
-                                                 {{fY fY} x}}}
-                                         {body-proc f}}}}
-                          {fX fX}}}}
-       {with {fac {mk-rec
-                   {fun {fac}   ; Exactly like original fac
-                        {fun {n}
-                             {ifexp {= n 0}
-                                 1
-                                 {* n {fac {- n 1}}}}}}}}{fac 5}}})
-
-
-;(app (fun 'sum (app (id 'sum) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 0) (add (app (id 'sum) (sub (id 'n) (num 1))) (id 'n)))))
-;(rec 'fac (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))) (app (id 'fac) (num 3)))
-;(app (fun 'fac (app (id 'fac) (num 3))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))))
+;                               {* n {fac {- n 1}}}}}} {fac 10}})
 
