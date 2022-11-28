@@ -66,73 +66,98 @@
   (zero? (numV-n n)))
 
 (define (is-in-list list value)
- (cond
-  [(empty? list) false]
-  [(equal? (first list) value) true]
-  [else (is-in-list (rest list) value)]))
-
-;(if (is-in-list  '(qq oa 3 4 ifexp op or) 'ifexp) (print "yaho") (print "noyaho"))
-
-;[contract] is-recursion: RLFAE DefrdSub->bool
-;[purpose] to check wheter an RLFAE expression contains recursion
-(define (is-recursion origin-ftn v n)
+  ;(display "Now in is-in-list ")
+  ;(display "list: ")
+  ;(display list)
+  ;(display " value: ")
+  ;(display value)
+  ;(display "\n")
   (cond
-    [(= n 0)
-     (when (list? v)
-      (for([i v]) ; when true
-        (when (list? i)
-          (print i)
-          (when (is-in-list i 'ifexp)
-            (display " yaho ")
-            (is-recursion i origin-ftn 1))))
-      ) ] ; first input
-    [(= n 1)
-     (when (list? v)
-      (for([i v]) ; when true
-        (when (list? i)
-          ;(print i)
-          (if (is-recursion i origin-ftn 2)
-              (#t)
-          (when (not (empty? (rest i))) (is-recursion i origin-ftn 2))))))] ; ifexp?
-    [(= n 2)
-     (when (list? v)
-      (for([i v]) ; when true
-        (when (list? i)
-          (display origin-ftn)
-          (is-in-list i origin-ftn)))
-      )]
-    [else #f]) ; rec?
+    [(empty? list) false]
+    [(list? (first list)) (is-in-list (first list) value)]
+    [(equal? (first list) value) true]
+    [else (is-in-list (rest list) value)]))
+
+;[contract] is-recursion: RLFAE -> bool
+;[purpose] to check wheter an RLFAE expression contains recursion
+(define (is-recursion sexp)
+  (match sexp
+    [(list 'with (list i v) e) (is-recursion-in-v i v 0)]
+    [else #f])
   )
 
+(define (is-recursion-in-v i v n)
+  ;(display "come in ")
+  ;(display "i: ")
+  ;(display i)
+  ;(display " v origin: ")
+  ;(display v)
+  ;(display " n: ")
+  ;(display n)
+  ;(display "\n")
+  (if (and (list? v) (not (empty? v)))
+      (cond
+         [(= n 0)
+          (if (and (list? (first v)) (is-in-list (first v) 'ifexp))
+              (is-recursion-in-v i (rest (first v)) 1)
+              (if (list? (rest v)) (is-recursion-in-v i (rest v) 0) #f))]
+         [(= n 1)
+          ;(display "v1: ")
+          ;(display v)
+          ;(display "\n")
+          (if (and (list? (first v)) (is-in-list (first v) i))
+              #t
+              (if (and (list? (rest v)) (is-in-list (rest v) i))
+                  #t
+                  #f))
+          ])
+      #f
+  ))
 
 
 
-;    (if (empty? (rest l))
-;        (#f)
-;        (is-member (rest l) exp))))
-
-;(when (and (list? v-arg) (member 'ifexp v-arg))
-;                    (when (member origin-ftn (member'ifexp v-arg))
-;                      (print "recursive"))
-;                      (printf "first :~a\n" (second(last (rest (member'ifexp v-arg)))))
-;                    #t)
 ;[contract] is-recursion: RLFAE DefrdSub->bool
 ;[purpose] to check wheter an RLFAE expression contains recursion
 (define (desugar v)
-  ;(print "desugar")
+  (display "yaho!")
   v
   )
+(display "=========================\n")
+(display (is-recursion-in-v 'fac '{fun {n}
+                       {ifexp {= n 0}
+                            1
+                            {* n {fac {- n 1}}}}} 0))
+(display "=========================\n")
 
-
-;[rec (bound-id named-expr fst-call)
-;     (local [(define value-holder (box (numV 198)))
-;              (define new-ds (aRecSub bound-id
-;                                      value-holder
-;                                      ds))]
-;        (begin
-;          (set-box! value-holder (interp named-expr new-ds))
-;          (interp fst-call new-ds)))]
-
+(is-recursion '{with {fac {fun {n}
+                       {ifexp {= n 0}
+                            1
+                            {* n {fac {- n 1}}}}}}
+          {fac 3}})
+(display "=========================\n")
+(is-recursion '{with {x 1} {+ x 2}})
+(display "=========================\n")
+(is-recursion '{with {fac {fun {x} 1}} {with {fac {fun {n}
+                                                 {ifexp {= n 0}
+                                                     1
+                                                     {* n {fac {- n 1}}}}}} {fac 10}}})
+(display "=========================\n")
+(if (is-recursion '{with {fib {fun {n}
+                        {ifexp {orop {= n 0} {= n 1}}
+                               1
+                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+           {fib 3}}) (desugar '{with {fib {fun {n}
+                        {ifexp {orop {= n 0} {= n 1}}
+                               1
+                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+           {fib 3}}) (display "okok"))
+(display "=========================\n")
+(is-recursion '{with {fib {fun {x} x}} {with {fib {fun {n}
+                        {ifexp {orop {= n 0} {= n 1}}
+                               1
+                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+           {fib 5}}})
+(display "=========================\n")
 ; [contract] lookup: symbol DefrdSub -> RCFAE-Value
 (define (lookup name ds)
   (type-case DefrdSub ds
@@ -154,9 +179,7 @@
     [(list '- l r) (sub (parse l) (parse r))]
     [(list '* l r) (mul (parse l) (parse r))]
     [(list '= l r) (eq (parse l) (parse r))]
-    [(list 'with (list i v) e) (app (fun i (parse e)) (if (is-recursion i v 0)
-                                                          (parse (desugar v))
-                                                          (parse v)))] ; i에서 recursive check [(list 'with (list i v) e) (app (fun i (parse e)) (parse v))]
+    [(list 'with (list i v) e) (app (fun i (parse e)) (parse v))] ; i에서 recursive check [(list 'with (list i v) e) (app (fun i (parse e)) (parse v))]
     ;(if (is-recursion i v)
                                                          ; (parse (desugar v))
                                                           ;(parse v))
@@ -200,8 +223,13 @@
           (or (interp l ds) (interp r ds))]))
 
 
-(define (run sexp ds)
-  (interp (parse sexp) ds))
+(define (run sexp)
+     (if (equal? (is-recursion sexp) #t)
+         (interp (parse (desugar sexp)) (mtSub))
+         (interp (parse sexp) (mtSub))))
+
+
+; language definition end point
 
 (parse '{rec {fac {fun {n}
                        {ifexp {= n 0}
@@ -231,20 +259,13 @@
                        {ifexp {= n 0}
                             1
                             {* n {fac {- n 1}}}}}}
-          {fac 3}} (mtSub))
+          {fac 3}})
 
 (run '{rec {fib {fun {n}
                         {ifexp {orop {= n 0} {= n 1}}
                                1
                                {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 3}}(mtSub))
-
-
-(parse '{orop {= 2 2} {= 1 0}})
-(run '{orop {= 1 2} {= 1 0}} (mtSub))
-;(parse '{with{fun {x} {+ x x}}} )
-(run'{+ {with {x 10} {+ x x}} 4} (mtSub))
-
+           {fib 3}})
 
 (parse '{with {fac {fun {x} 1}} {with {fac {fun {n}
                                                  {ifexp {= n 0}
@@ -255,20 +276,47 @@
                         {ifexp {= n 0}
                                1
                                {* n {fac {- n 1}}}}}} {fac 10}})
-
-;(run '{with {fac {fun {x} 1}} {with {fac {fun {n}
-;                                                 {ifexp {= n 0}
-;                                                     1
-;                                                     {* n {fac {- n 1}}}}}} {fac 4}}} (mtSub))
+'===============
+(run '{with {fac {fun {x} 1}} {with {fac {fun {n}
+                                                 {ifexp {= n 0}
+                                                     1
+                                                     {* n {fac {- n 1}}}}}} {fac 4}}})
+'===============
 ;(run '{rec {fac {fun {n}
 ;                        {ifexp {= n 0}
 ;                               1
 ;                               {* n {fac {- n 1}}}}}} {fac 10}} (mtSub))
 
-(parse '{with {sum {fun {x} {+ x x}}} {sum 10}})
+(parse '{with {sum {fun {x} {+ x x}}} {with {fac {fun {n}
+                                                {ifexp {= n 0}
+                                                       0
+                                                       {+ n {sum {- n 1}}}}}} {fac 10}}})
+(app (fun 'sum (app (fun 'fac (app (id 'fac) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 0) (add (id 'n) (app (id 'sum) (sub (id 'n) (num 1))))))))
+     (fun 'x (add (id 'x) (id 'x))))
+                             
+
+(run '{with {sum {fun {x} {+ x x}}} {with {fac {fun {n}
+                                                {ifexp {= n 3}
+                                                       100
+                                                       {+ n {sum {- n 1}}}}}} {fac 9}}})
 (parse '{with {sum {fun {n} {ifexp {= n 0} 0 {+ {sum {- n 1}} n}}}} {sum 10}})
 '{with {sum {fun {n} {ifexp {= n 0} 0 {+ {sum {- n 1}} n}}}} {sum 10}}
-(app (fun 'sum (app (id 'sum) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 0) (add (app (id 'sum) (sub (id 'n) (num 1))) (id 'n)))))
-(rec 'fac (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))) (app (id 'fac) (num 3)))
-(app (fun 'fac (app (id 'fac) (num 3))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))))
+
+(run '{with {mk-rec {fun {body-proc}
+                    {with {fX {fun {fY}
+                                   {with {f {fun {x}
+                                                 {{fY fY} x}}}
+                                         {body-proc f}}}}
+                          {fX fX}}}}
+       {with {fac {mk-rec
+                   {fun {fac}   ; Exactly like original fac
+                        {fun {n}
+                             {ifexp {= n 0}
+                                 1
+                                 {* n {fac {- n 1}}}}}}}}{fac 5}}})
+
+
+;(app (fun 'sum (app (id 'sum) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 0) (add (app (id 'sum) (sub (id 'n) (num 1))) (id 'n)))))
+;(rec 'fac (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))) (app (id 'fac) (num 3)))
+;(app (fun 'fac (app (id 'fac) (num 3))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))))
 
