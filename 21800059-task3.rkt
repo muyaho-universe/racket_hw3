@@ -16,6 +16,7 @@
   [add (lhs RCFAEDS?) (rhs RCFAEDS?)]
   [sub (lhs RCFAEDS?) (rhs RCFAEDS?)]
   [mul (lhs RCFAEDS?) (rhs RCFAEDS?)]
+  [eq (lhs RCFAEDS?) (rhs RCFAEDS?)]
   [id (name symbol?)]
   [fun(param symbol?)(body-expr RCFAEDS?)]
   [app (f RCFAEDS?) (a RCFAEDS?)]
@@ -72,23 +73,48 @@
     [id (name) (lookup name ds)]
     [fun (param body-expr) (closureV param body-expr ds)]
     [app (f a)
+         (display "========app=========\n")
+         (display "f: ")
+         (display f)
+         (display "\n")
+         (display "a: ")
+         (display a)
+         (display "\n")
              (local [(define ftn (interp f ds))]
                             (interp (closureV-body ftn)
                                          (aSub (closureV-param ftn)
                                                      (interp a ds)
                                                      (closureV-ds ftn))))]
     [ifexp (test-expr then-expr else-expr)
-         (if (numzero? (interp test-expr ds))
+         (if (interp test-expr ds)
              (interp then-expr ds)
              (interp else-expr ds))]
     [orop (l r)
-          (or (interp l ds) (interp r ds))]))
+          (or (interp l ds) (interp r ds))]
+    [eq (l r) (equal? (interp l ds) (interp r ds))]))
 
 ; [contract] lookip: symbol DefrdSub -> RCFAE-Value
 (define (lookup name ds)
+  (display "========look up======\n")
+  (display "name: ")
+  (display name)
+  (display "\n")
+  (display "ds: ")
+  (display ds)
+  (display "\n")
+  (display "=====================\n")
   (type-case DefrdSub ds
     [mtSub () (error 'lookup "free variable")]
     [aSub (sub-name val rest-ds)
+          (display "sub-name: ")
+          (display sub-name)
+          (display "\n")
+          (display "val: ")
+          (display val)
+          (display "\n")
+          (display "rest-ds: ")
+          (display rest-ds)
+          (display "\n")
           (if (symbol=? sub-name name)
               val
               (lookup name rest-ds))]
@@ -110,6 +136,7 @@
     [(list f a) (app (parse f) (parse a))]
     [(list 'ifexp te th el) (ifexp (parse te) (parse th) (parse el))]
     [(list 'orop l r) (orop (parse l) (parse r))]
+    [(list '= l r) (eq (parse l) (parse r))]
     [else (error 'parse "bad syntax: ~a" sexp)]))
 
 (define (run sexp)
@@ -121,9 +148,8 @@
                             1
                             {* n {fac {- n 1}}}}}}
           {fac 10}})
-(run '{rec {fac {fun {n}
-                       {ifexp n
-                            1
-                            {* n {fac {- n 1}}}}}}
-          {fac 10}} (mtSub))
-(run '{rec {count {fun {n} {ifexp n 0 {+ 1 {count {- n 1}}}}}} {count 8}}(mtSub))
+(parse '{with {w {fun {n} 2}} {with {w {fun {x} {ifexp {= x 0} 1 {* 8 {w {- x 1}}}}}} {w 6}}})
+(run '{with {w {fun {n} 2}} {with {w {fun {x} {ifexp {= x 0} 1 {* 8 {w {- x 1}}}}}} {w 6}}} )
+;(run '{with {fac {fun {n} {ifexp n 1 {* n {fac {- n 1}}}}}} {fac 10}})
+
+;(run '{with {count {fun {n} {ifexp n 0 {+ 1 {count {- n 1}}}}}} {count 8}} )

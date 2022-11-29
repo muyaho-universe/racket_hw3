@@ -10,6 +10,7 @@
 ;                  | {<RLFAE> <RLFAE>}
 ;                  | {ifexp <RCFAE> <RCFAE> <RCFAE>}
 ;                  | {orop <RCFAE> <RCFAE>}
+;                  | {eq <RCFAE> <RCFAE>}
 
 (define-type RLFAE
   [num (n number?)]
@@ -74,9 +75,19 @@
 ;[purpose] to check wheter an RLFAE expression contains recursion
 (define (is-recursion sexp)
   (match sexp
-    [(list 'with (list i v) e) (is-recursion-in-v i v 0)]
+    [(list 'with (list i v) e) (if (is-recursion-in-v i  v 0)
+                                   #t
+                                   (if (equal? 'with (first e)) (is-recursion-e i e) #f))]
     [else #f])
   )
+(define (is-recursion-e origin-i sexp)
+  (match sexp
+    [(list 'with (list i v) e) (if (and (not (equal? origin-i i)) (is-recursion-in-v i v 0))
+                                   #t
+                                   (if (equal? 'with (first e)) (is-recursion e) #f))]
+    [else #f])
+  )
+
 
 ;[contract] is-recursion: RLFAE n -> bool
 (define (is-recursion-in-v i v n)
@@ -93,11 +104,38 @@
                   #t
                   #f))])
       #f))
-
+(is-recursion '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}})   ; #t
+(display "=========================\n")
+(is-recursion '{with {fib {fun {x} 3}} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) ; #f
+(display "=========================\n")
+(is-recursion '{with {sum {fun {x} 3}} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) ; #t
+(display "=========================\n")
+(test (is-recursion '{with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}) #t)
+(test (is-recursion '{with {fac {fun {x} 1}} {with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 10}}}) #f)
+(test (is-recursion '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 10}}) #t)
+(test (is-recursion '{{fun {x} {+ 1 x}} 10}) #f)
+(test (is-recursion '{with {x 3} {with {f {fun {y} {+ x y}}} {with {x 5} {f 4}}}}) #f)
+(test (is-recursion '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) #t)
+(test (is-recursion '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 10}}) #t)
+(test (is-recursion '{{fun {x} {+ 1 x}} 10}) #f)
+(test (is-recursion '{with {count {fun {n} {ifexp {= n 0} 0 {+ 1 {count {- n 1}}}}}} {count 8}}) #t)
+(test (is-recursion '{{fun {x} {+ x x}} {+ 1 {{fun {y} 2} 1}}}) #f)
+(test (is-recursion '{{fun {x} {+ {+ x x} {+ x x}}} {- {+ 4 5} {+ 8 9}}}) #f)
+(display "=========================\n")
 
 ;[contract] desugar sexp -> sexp
 ;[purpose] to check wheter an RLFAE expression contains recursion
 (define (desugar sexp)
+  (match sexp
+    [(list 'with (list i v) e)
+     (if (is-recursion-in-v i  v 0)
+         (make-it-work (list 'with (list i v) e))
+         (if (is-recursion-e i e) (make-it-work e) sexp))
+     ]
+    [else sexp])
+  )
+
+(define (make-it-work sexp)
   (match sexp
     [(list 'with (list i v) e)
      (list 'with (list 'mk-rec
@@ -113,41 +151,9 @@
            (list 'with (list i (list 'mk-rec (list 'fun (list i)  v))) e))]
     [else sexp])
   )
-
-
-
+(display "=========desugar!!===========\n")
+(desugar '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}})
 (display "=========================\n")
-
-(desugar '{with {fac {fun {n}
-                       {ifexp {= n 0}
-                            1
-                            {* n {fac {- n 1}}}}}}
-          {fac 10}})
-(display "=========================\n")
-(is-recursion '{with {x 1} {+ x 2}})
-(display "=========================\n")
-(is-recursion '{with {fac {fun {x} 1}} {with {fac {fun {n}
-                                                 {ifexp {= n 0}
-                                                     1
-                                                     {* n {fac {- n 1}}}}}} {fac 10}}})
-(display "=========================\n")
-(if (is-recursion '{with {fib {fun {n}
-                        {ifexp {orop {= n 0} {= n 1}}
-                               1
-                               {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 3}}) (desugar '{with {fib {fun {n}
-                        {ifexp {orop {= n 0} {= n 1}}
-                               1
-                               {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 3}}) (display "okok"))
-(display "=========================\n")
-(is-recursion '{with {fib {fun {x} x}} {with {fib {fun {n}
-                        {ifexp {orop {= n 0} {= n 1}}
-                               1
-                               {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 5}}})
-(display "=========================\n")
-
 ; [contract] lookup: symbol DefrdSub -> RCFAE-Value
 (define (lookup name ds)
   (type-case DefrdSub ds
@@ -216,75 +222,55 @@
                                {+{fib {- n 1}} {fib {- n 2}}}}}}
            {fib 3}})
 
-(run '{rec {fac {fun {n}
-                       {ifexp {= n 0}
-                            1
-                            {* n {fac {- n 1}}}}}}
-          {fac 3}})
+;(parse '{with {fib {fun {n}
+;                        {ifexp {orop {= n 0} {= n 1}}
+;                               1
+;                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+;           {fib 3}});
 
-(parse '{with {fib {fun {n}
-                        {ifexp {orop {= n 0} {= n 1}}
-                               1
-                               {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 3}})
+;(parse '{with {fac {fun {x} 1}} {with {fac {fun {n}
+;                                                 {ifexp {= n 0}
+;                                                     1
+;                                                     {* n {fac {- n 1}}}}}} {fac 10}}})
 
-(parse '{with {fac {fun {x} 1}} {with {fac {fun {n}
-                                                 {ifexp {= n 0}
-                                                     1
-                                                     {* n {fac {- n 1}}}}}} {fac 10}}})
+;(parse '{with {fac {fun {n}
+ ;                       {ifexp {= n 0}
+ ;                              1
+ ;                              {* n {fac {- n 1}}}}}} {fac 10}})
 
-(parse '{with {fac {fun {n}
-                        {ifexp {= n 0}
-                               1
-                               {* n {fac {- n 1}}}}}} {fac 10}})
-
-(run '{with {fac {fun {x} 1}} {with {fac {fun {n}
-                                                 {ifexp {= n 0}
-                                                     1
-                                                     {* n {fac {- n 1}}}}}} {fac 4}}})
+;(run '{with {fac {fun {x} 1}} {with {fac {fun {n}
+ ;                                                {ifexp {= n 0}
+;                                                     1
+;                                                     {* n {fac {- n 1}}}}}} {fac 4}}})
 (display "===============\n")
 
-'{with {mk-rec {fun {body-proc}
-                          {with {fX {fun {fY}
-                                         {with {f {fun {x}
-                                                       {{fY fY} x}}}
-                                               {body-proc f}}}}
-                                {fX fX}}}}
-             {with {fac {mk-rec
-                         {fun {fac} ; Exactly like original fac
-                              {fun {n}
-                                   {ifexp {= n 0}
-                                          1
-                                          {* n {fac {- n 1}}}}}}}}
-                   {fac 10}}}
-(run'{with {mk-rec {fun {body-proc}
-                          {with {fX {fun {fY}
-                                         {with {f {fun {x}
-                                                       {{fY fY} x}}}
-                                               {body-proc f}}}}
-                                {fX fX}}}}
-             {with {fac {mk-rec
-                         {fun {fac} ; Exactly like original fac
-                              {fun {n}
-                                   {ifexp {= n 0}
-                                          1
-                                          {* n {fac {- n 1}}}}}}}}
-                   {fac 10}}})
+;'{with {mk-rec {fun {body-proc}
+;                          {with {fX {fun {fY}
+;                                         {with {f {fun {x}
+;                                                       {{fY fY} x}}}
+;                                               {body-proc f}}}}
+;                                {fX fX}}}}
+;             {with {fac {mk-rec
+;                         {fun {fac} ; Exactly like original fac
+;                              {fun {n}
+;                                   {ifexp {= n 0}
+;                                          1
+;                                          {* n {fac {- n 1}}}}}}}}
+;                   {fac 10}}}
+;(run'{with {mk-rec {fun {body-proc}
+;                          {with {fX {fun {fY}
+;                                         {with {f {fun {x}
+;                                                       {{fY fY} x}}}
+;                                               {body-proc f}}}}
+;                                {fX fX}}}}
+;             {with {fac {mk-rec
+;                         {fun {fac} ; Exactly like original fac
+;                              {fun {n}
+;                                   {ifexp {= n 0}
+;                                          1
+;                                          {* n {fac {- n 1}}}}}}}}
+;                   {fac 10}}})
 
-(display "===============\n")
-(interp (parse '{with {mk-rec {fun {body-proc}
-                          {with {fX {fun {fY}
-                                         {with {f {fun {x}
-                                                       {{fY fY} x}}}
-                                               {body-proc f}}}}
-                                {fX fX}}}}
-             {with {fac {mk-rec
-                         {fun {fac} ; Exactly like original fac
-                              {fun {n}
-                                   {ifexp {= n 0}
-                                          1
-                                          {* n {fac {- n 1}}}}}}}}
-                   {fac 5}}}) (mtSub))
 (display "===============\n")
 (display "This is parsing of given code\n")
 (parse '{with {mk-rec {fun {body-proc}
@@ -322,19 +308,46 @@
                                           {* n {fac {- n 1}}}}}}}}
                    {fac 5}}}
 (display "========last=======\n")
+;(run '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}})
+(run '{with {fib {fun {x} 3}} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 4}}})
+(display "=========================\n")
 
-(run  '{with {fac {fun {n}
-                        {ifexp {= n 0}
-                               1
-                               {* n {fac {- n 1}}}}}} {fac 6}})
-(run '{with {fib {fun {n}
+(desugar '{with {fac {fun {n}
+                       {ifexp {= n 0}
+                            1
+                            {* n {fac {- n 1}}}}}}
+          {fac 10}})
+(display "=========================\n")
+(is-recursion '{with {x 1} {+ x 2}})
+(display "=========================\n")
+(is-recursion '{with {fac {fun {x} 1}} {with {fac {fun {n}
+                                                 {ifexp {= n 0}
+                                                     1
+                                                     {* n {fac {- n 1}}}}}} {fac 10}}})
+(display "=========================\n")
+(if (is-recursion '{with {fib {fun {n}
                         {ifexp {orop {= n 0} {= n 1}}
                                1
                                {+{fib {- n 1}} {fib {- n 2}}}}}}
-           {fib 10}})
+           {fib 3}}) (desugar '{with {fib {fun {n}
+                        {ifexp {orop {= n 0} {= n 1}}
+                               1
+                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+           {fib 3}}) (display "okok"))
+(display "=========================\n")
+(is-recursion '{with {fib {fun {x} x}} {with {fib {fun {n}
+                        {ifexp {orop {= n 0} {= n 1}}
+                               1
+                               {+{fib {- n 1}} {fib {- n 2}}}}}}
+           {fib 5}}})
+(display "=========================\n")
 
-;(run '{with {fac {fun {n}
-;                        {ifexp {= n 0}
-;                               1
-;                               {* n {fac {- n 1}}}}}} {fac 10}})
+(run  '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 6}})
+(run '{with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+{fib {- n 1}} {fib {- n 2}}}}}} {fib 10}})
+(run '{with {fac {fun {x} 2}} {with {fac {fun {n}{ifexp {= n 0}1{* n {fac {- n 1}}}}}} {fac 10}}})
 
+(run '{with {count {fun {n} {ifexp {= n 0} 0 {+ 1 {count {- n 1}}}}}}{count 8}})
+
+
+
+(run '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}})
