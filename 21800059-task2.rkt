@@ -136,7 +136,8 @@
 
 ;[contract] desugar sexp -> sexp
 ;[purpose] to desugar sexp which contains recursive function by applying mk-rec template
-; [test] (test (desugar '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) '(with (mk-rec (fun (body-proc) (with (fX (fun (fY) (with (f (fun (x) ((fY fY) x))) (body-proc f)))) (fX fX)))) (with (fib (mk-rec (fun (fib) (fun (n) (ifexp (orop (= n 0) (= n 1)) 1 (+ (fib (- n 1)) (fib (- n 2)))))))) (fib 10))))
+;[test] (test (desugar '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) '(with (mk-rec (fun (body-proc) (with (fX (fun (fY) (with (f (fun (x) ((fY fY) x))) (body-proc f)))) (fX fX)))) (with (fib (mk-rec (fun (fib) (fun (n) (ifexp (orop (= n 0) (= n 1)) 1 (+ (fib (- n 1)) (fib (- n 2)))))))) (fib 10))))
+;(test (desugar '{with {count {fun {n} {ifexp {= n 0} 0 {+ 1 {count {- n 1}}}}}} {count 8}}) '(with (mk-rec (fun (body-proc) (with (fX (fun (fY) (with (f (fun (x) ((fY fY) x))) (body-proc f)))) (fX fX)))) (with (count (mk-rec (fun (count) (fun (n) (ifexp (= n 0) 0 (+ 1 (count (- n 1)))))))) (count 8))))
 (define (desugar sexp)
   (match sexp
     [(list 'with (list i v) e)
@@ -169,7 +170,7 @@
 (test (desugar '{with {x 3} {with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+ {fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}}) '(with (mk-rec (fun (body-proc) (with (fX (fun (fY) (with (f (fun (x) ((fY fY) x))) (body-proc f)))) (fX fX)))) (with (fib (mk-rec (fun (fib) (fun (n) (ifexp (orop (= n 0) (= n 1)) 1 (+ (fib (- n 1)) (fib (- n 2)))))))) (fib 10))))
 (test (desugar '{with {count {fun {n} {ifexp {= n 0} 0 {+ 1 {count {- n 1}}}}}} {count 8}}) '(with (mk-rec (fun (body-proc) (with (fX (fun (fY) (with (f (fun (x) ((fY fY) x))) (body-proc f)))) (fX fX)))) (with (count (mk-rec (fun (count) (fun (n) (ifexp (= n 0) 0 (+ 1 (count (- n 1)))))))) (count 8))))
 
-; [contract] lookup: symbol DefrdSub -> RCFAE-Value
+; [contract] lookup: symbol DefrdSub -> RLFAE-Value
 ; [purpose] to find the looking value
 (define (lookup name ds)
   (type-case DefrdSub ds
@@ -180,7 +181,7 @@
               (lookup name rest-ds))]))
 
 ; [contract] parse: sexp -> RLFAE
-; [purpose] to convert sexp to LFAE
+; [purpose] to convert sexp to RLFAE
 ; [test] (test (parse '{{fun {x} {+ {+ x x} {+ x x}}} {- {+ 4 5} {+ 8 9}}} (app (fun 'x (add (add (id 'x) (id 'x)) (add (id 'x) (id 'x)))) (sub (add (num 4) (num 5)) (add (num 8) (num 9)))))
 ;   (test (parse '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 10}}) (app (fun 'fac (app (id 'fac) (num 10))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1))))))))
 (define (parse sexp)
@@ -203,7 +204,7 @@
 
 ; [contract] interp: RLFAE DefrdSub -> RLFAE-Value
 ; [purpose] to get RLFAE value
-; [test] test is merged with run function
+; [test] tests are merged into run function
 (define (interp rlfae ds)
   (type-case RLFAE rlfae
     [num (n) (numV n)]
@@ -226,7 +227,7 @@
     [orop (l r)
           (or (interp l ds) (interp r ds))]))
 
-; [contract] interp: sexp -> RLFAE-Value
+; [contract] run sexp -> RLFAE-Value
 ; [purpose] to run desired program
 ; [test] (test (run  '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 6}}) (numV 720))
 ;        (test (run '{with {fib {fun {n} {ifexp {orop {= n 0} {= n 1}} 1 {+{fib {- n 1}} {fib {- n 2}}}}}} {fib 10}}) (numV 89))
