@@ -33,13 +33,14 @@
          (value (box/c (or/c false
                              RCFAEDS-Value?)))])
 
+
 ;DefrdSub
 (define-type DefrdSub
     [mtSub]
     [aSub (name symbol?) (value RCFAEDS-Value?) (ds DefrdSub?)]
-  [aRecSub (name symbol?)
-           (value-box (box/c RCFAEDS-Value?))
-           (ds DefrdSub?)])
+    [aRecSub (name symbol?)
+             (value-box (box/c RCFAEDS-Value?))
+             (ds DefrdSub?)])
 
 ; [contract] strict:
 (define (strict v)
@@ -59,10 +60,6 @@
 (define num- (num-op -))
 (define num* (num-op *))
 
-; [contract] RCFAE-Value -> boolean
-(define (numzero? n)
-  (zero? (numV-n n)))
-
 ; [contract] interp: RCFAE DefrdSub -> RCFAE-Value
 (define (interp rcfaeds ds)
   (type-case RCFAEDS rcfaeds
@@ -71,20 +68,22 @@
     [sub (l r) (num- (interp l ds) (interp r ds))]
     [mul (l r) (num* (interp l ds) (interp r ds))]
     [id (name) (lookup name ds)]
-    [fun (param body-expr) (closureV param body-expr ds)]
+    [fun (param body-expr)
+         (closureV param body-expr ds)]
     [app (f a)
-         (display "========app=========\n")
-         (display "f: ")
-         (display f)
-         (display "\n")
-         (display "a: ")
-         (display a)
-         (display "\n")
-             (local [(define ftn (interp f ds))]
+         (local [(define value-holder (box (numV 198)))
+                (define ftn (interp f ds))
+                (define new-ds (aRecSub (closureV-param ftn)
+                                        value-holder
+                                        ds))]
                             (interp (closureV-body ftn)
-                                         (aSub (closureV-param ftn)
+                                    (begin
+          (set-box! value-holder (interp a new-ds))
+          (interp (closureV-body ftn) (new-ds (aSub (closureV-param ftn)
                                                      (interp a ds)
-                                                     (closureV-ds ftn))))]
+                                                     (closureV-ds ftn)))))
+                                         ))
+          ]
     [ifexp (test-expr then-expr else-expr)
          (if (interp test-expr ds)
              (interp then-expr ds)
@@ -93,31 +92,16 @@
           (or (interp l ds) (interp r ds))]
     [eq (l r) (equal? (interp l ds) (interp r ds))]))
 
+
 ; [contract] lookip: symbol DefrdSub -> RCFAE-Value
 (define (lookup name ds)
-  (display "========look up======\n")
-  (display "name: ")
-  (display name)
-  (display "\n")
-  (display "ds: ")
-  (display ds)
-  (display "\n")
-  (display "=====================\n")
+ 
   (type-case DefrdSub ds
     [mtSub () (error 'lookup "free variable")]
     [aSub (sub-name val rest-ds)
-          (display "sub-name: ")
-          (display sub-name)
-          (display "\n")
-          (display "val: ")
-          (display val)
-          (display "\n")
-          (display "rest-ds: ")
-          (display rest-ds)
-          (display "\n")
-          (if (symbol=? sub-name name)
-              val
-              (lookup name rest-ds))]
+          (when (symbol=? sub-name name)
+              (if (DefrdSub? val) val
+              (lookup name rest-ds)))]
     [aRecSub (sub-name val-box rest-ds)
              (if (symbol=? sub-name name)
                  (unbox val-box)
@@ -142,14 +126,30 @@
 (define (run sexp)
   (interp (parse sexp) (mtSub)))
 
+(parse '{with {w {fun {n} 2}} {with {w {fun {x} {ifexp {= x 0} 1 {* 8 {w {- x 1}}}}}} {w 6}}})
 
 (parse '{with {fac {fun {n}
                        {ifexp n
                             1
                             {* n {fac {- n 1}}}}}}
           {fac 10}})
-(parse '{with {w {fun {n} 2}} {with {w {fun {x} {ifexp {= x 0} 1 {* 8 {w {- x 1}}}}}} {w 6}}})
-(run '{with {w {fun {n} 2}} {with {w {fun {x} {ifexp {= x 0} 1 {* 8 {w {- x 1}}}}}} {w 6}}} )
-;(run '{with {fac {fun {n} {ifexp n 1 {* n {fac {- n 1}}}}}} {fac 10}})
+(parse '{with {fac {fun {x} {+ x 2}}} {with {fac {fun {n}
+                                                 {ifexp {= n 0}
+                                                     1
+                                                    {* n {fac {- n 1}}}}}} {fac 4}}})
+;(run '{with {fac {fun {x} 2}} {with {fac {fun {n}
+ ;                                                {ifexp {= n 0}
+ ;                                                    1
+ ;                                                   {* n {fac {- n 1}}}}}} {fac 4}}} )
 
+;(run '{with {fac {fun {n} {ifexp {= n 0} 1 {* n {fac {- n 1}}}}}} {fac 10}})
+(run '{with {fac {fun {x} {ifexp {= x 0} {+ x 3} {+ {- x 1} 9}} }} {+ {fac 2} 9}})
+;(app (fun 'fac (app (fun 'w (app (id 'w) (num 6))) (fun 'x (ifexp (eq (id 'x) (num 0)) (num 1) (mul (num 8) (app (id 'w) (sub (id 'x) (num 1)))))))) (fun 'n (num 2)))
+
+(app (fun 'fac (app (fun 'fac (app (id 'fac) (num 4))) (fun 'n (ifexp (eq (id 'n) (num 0)) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))))) (fun 'x (num 2)))
+
+(app (fun 'fac (app (id 'fac) (num 10))) (fun 'n (ifexp (id 'n) (num 1) (mul (id 'n) (app (id 'fac) (sub (id 'n) (num 1)))))))
+;(run '{with {fac {fun {n} {ifexp n 1 {* n {fac {- n 1}}}}}} {fac 10}})
+;fac
+;ds: #0=#(struct:aRecSub fac #&#(struct:closureV x #(struct:ifexp #(struct:eq #(struct:id x) #(struct:num 0)) #(struct:add #(struct:id x) #(struct:num 3)) #(struct:add #(struct:app #(struct:id fac) #(struct:sub #(struct:id x) #(struct:num 3))) #(struct:num 9))) #0#) #(struct:mtSub))
 ;(run '{with {count {fun {n} {ifexp n 0 {+ 1 {count {- n 1}}}}}} {count 8}} )

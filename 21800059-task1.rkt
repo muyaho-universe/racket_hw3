@@ -41,6 +41,15 @@
                (unbox v-box))]
     [else v]))
 
+; [contract] lookup: symbol DefrdSub -> symbol
+; [purpose] to find the looking value
+(define (lookup name ds)
+      (type-case DefrdSub ds
+            [mtSub       ()                  (error 'lookup "free identifier")]
+            [aSub      (i v saved)      (if (symbol=? i name)
+                                                                     v
+                                                                     (lookup name saved))]))
+
 ; [contract] num-op: (number number -> number) -> (LFAE LFAE -> LFAE)
 ; [purpose] to make number operation abstrct
 (define (num-op op x y)
@@ -52,6 +61,7 @@
 ; [contract] parse: sexp -> LFAE
 ; [purpose] to convert sexp to LFAE
 ; [test] (test (parse x) (id 'x))
+;   (test (parse '{{fun {x} {+x 2}} 3}) (app (fun 'x (app (id '+x) (num 2))) (num 3)))
 (define (parse sexp)
    (match sexp
         [(? number?) (num sexp)]
@@ -62,9 +72,13 @@
         [(list f a) (app (parse f) (parse a))]
         [else  (error 'parse "bad syntax: ~a" sexp)]))
 
+(test (parse 'x) (id 'x))
+(test (parse '{{fun {x} {+x 2}} 3}) (app (fun 'x (app (id '+x) (num 2))) (num 3)))
 
 ; [contract] interp : LFAE DefrdSub -> LFAE-Value
 ; [purpose] to get LFAE value
+; [test] (test (interp (parse '{{fun {x} {+ x 2}} 3}) (mtSub)) (numv 5))
+;        (test (interp (parse '{{fun {x} 10} {+ 1 {fun {y} 2}}}) (mtSub)) (numV 10))
 (define (interp lfae ds)
   (type-case LFAE lfae
      [num (n)      (numV n)]
@@ -79,18 +93,5 @@
                                  a-val
                                  (closureV-ds f-val)))))]))
 
-; [contract] lookup: symbol DefrdSub -> symbol
-; [purpose] to find the looking value
-(define (lookup name ds)
-      (type-case DefrdSub ds
-            [mtSub       ()                  (error 'lookup "free identifier")]
-            [aSub      (i v saved)      (if (symbol=? i name)
-                                                                     v
-                                                                     (lookup name saved))]))
-
-(test (parse 'x) (id 'x))
-(parse '{+ 1 2})
-(interp (parse '{{fun {x} {+ x 10}} 15}) (mtSub))
-(interp (parse '{+ 1 2})(mtSub))
-(parse '{{fun {x} 10} {+ 1 {fun {y} 2}}})
-(interp (parse '{{fun {x} 10} {+ 1 {fun {y} 2}}}) (mtSub))
+(test (interp (parse '{{fun {x} {+ x 2}} 3}) (mtSub)) (numV 5))
+(test (interp (parse '{{fun {x} 10} {+ 1 {fun {y} 2}}}) (mtSub)) (numV 10))
